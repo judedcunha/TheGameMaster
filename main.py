@@ -1,52 +1,85 @@
-from transformers import AutoModelForCausalLM, AutoTokenizer
-from datasets import Dataset
-import PyPDF2
-import re
-import json
+from transformers import AutoTokenizer, AutoModelForCausalLM, Trainer, TrainingArguments
+from datasets import load_from_disk
 
+# Load the preprocessed dataset
+dataset = load_from_disk("dnd_dataset")
 
-def extract_text_from_pdf(pdf_path):
-    with open(pdf_path, "rb") as file:
-        reader = PyPDF2.PdfReader(file)
-        text = ""
-        for page in reader.pages:
-            text += page.extract_text()
-        return text
-
-
-def clean_text(text):
-    text = re.sub(r'\n+', ' ', text)  # Remove extra newlines
-    text = re.sub(r'\s+', ' ', text)  # Remove extra spaces
-    text = text.lower()  # Convert to lowercase
-    return text
-
-structured_data = {
-    "rule": "Combat",
-    "description": "During combat, players take turns to attack...",
-    "example": "Player rolls a d20 to hit the goblin."
-}
-
-with open("combat_rule.json", "w") as f:
-    json.dump(structured_data, f)
-
-rulebook_text = extract_text_from_pdf("rulebook.pdf")
-cleaned_text = clean_text(rulebook_text)
-
-
+# Load the tokenizer and model
 model_name = "openai-community/gpt2"  # or "meta-llama/Llama-2-7b"
-tokenizer = AutoTokenizer.from_pretrained(model_name)  # or "meta-llama/Llama-2-7b"
+tokenizer = AutoTokenizer.from_pretrained(model_name)
+model = AutoModelForCausalLM.from_pretrained(model_name)
 
-text = "The players enter a dark forest. What happens next?"
-inputs = tokenizer(text, return_tensors="pt")
+# Add a custom padding token
+tokenizer.add_special_tokens({"pad_token": "[PAD]"})
+model.resize_token_embeddings(len(tokenizer))
 
-print(inputs)
+# Tokenize the dataset
+def tokenize_function(examples):
+    # Tokenize the input text
+    tokenized_input = tokenizer(
+        examples["input"],
+        padding="max_length",
+        truncation=True,
+        max_length=512,  # Adjust as needed
+    )
 
-data = [
-    {"input": "The players enter a dark forest. What happens next?", "output": "As you step into the forest, the air grows cold..."},
-    {"input": "The rogue tries to pick the lock.", "output": "The rogue carefully inserts the lockpick and feels the tumblers click into place."}
-]
+    # For causal language modeling, labels are the same as input_ids
+    tokenized_input["labels"] = tokenized_input["input_ids"].copy()
+    return tokenized_input
 
-dataset = Dataset.from_dict({"input": [d["input"] for d in data], "output": [d["output"] for d in data]})
-print(dataset)
 
-dataset.save_to_disk("dnd_dataset")
+# Apply the tokenization function to the dataset
+tokenized_dataset = dataset.map(tokenize_function, batched=True)
+
+
+
+# Split the dataset
+split_dataset = tokenized_dataset.train_test_split(test_size=0.1)
+train_dataset = split_dataset["train"]
+eval_dataset = split_dataset["test"]
+
+
+print(train_dataset[0])
+
+# Set up training arguments
+training_args = TrainingArguments(
+    output_dir="./dnd_gm_model",
+    per_device_train_batch_size=4,
+    per_device_eval_batch_size=4,
+    num_train_epochs=3,
+    evaluation_strategy="epoch",
+    save_strategy="epoch",
+    logging_dir="./logs",
+    logging_steps=10,
+    save_total_limit=2,
+    fp16=True,
+)
+
+# Define the trainer
+trainer = Trainer(
+    model=model,
+    args=training_args,
+    train_dataset=train_dataset,
+    eval_dataset=eval_dataset,
+)
+
+# Fine-tune the model
+trainer.train()
+
+# Save the fine-tuned model
+trainer.save_model("./dnd_gm_model")
+tokenizer.save_pretrained("./dnd_gm_model")
+
+# Test the model
+def generate_response(prompt, model, tokenizer, max_length=100):
+    inputs = tokenizer(prompt, return_tensors="pt")
+    outputs = model.generate(**inputs, max_length=max_length)
+    return tokenizer.decode(outputs[0], skip_special_tokens=True)
+
+prompt = "The players enter a dark forest. What happens next?"
+response = generate_response(prompt, model, tokenizer)
+print(f"GM: {response}")
+
+
+eval_results = trainer.evaluate()
+print(f"Evaluation results: {eval_results}")

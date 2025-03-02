@@ -93,7 +93,7 @@ The frontend will be available at `http://127.0.0.1:8080`.
 ```
 TheGameMaster/
 ├── app.py                  # FastAPI backend
-├── main.py                # Script to fine-tune the model
+├── main.py                 # Script to fine-tune the model
 ├── preprocess.py           # Script to preprocess the data
 ├── dnd_gm_model/           # Fine-tuned model and tokenizer
 ├── index.html              # Frontend interface
@@ -118,10 +118,6 @@ Contributions are welcome! If you’d like to contribute, please:
 
 ---
 
-## **License**
-This project is licensed under the **MIT License**. See the [LICENSE](LICENSE) file for details.
-
----
 
 ## **Acknowledgments**
 - [Hugging Face Transformers](https://huggingface.co/transformers/) for the LLM framework.

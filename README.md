@@ -30,6 +30,8 @@ The application consists of:
 Install the required libraries:
 ```bash
 pip install fastapi uvicorn transformers
+pip install transformers datasets torch
+pip install transformers[torch]
 ```
 
 ---

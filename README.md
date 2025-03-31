@@ -8,6 +8,9 @@ The application consists of:
 2. A **FastAPI backend** that serves the fine-tuned LLM.
 3. A **simple web interface** for players to interact with the GM.
 
+![image](https://github.com/user-attachments/assets/f7a42ee9-0eac-4eb4-b26f-60c950a93f20)
+
+
 ---
 
 ## **Features**
